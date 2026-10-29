@@ -1,0 +1,46 @@
+I am on a Wells Fargo org laptop. Constraints: NO MCPs are available, and I
+want to avoid installing extra CLI tools. You will control the browser on this
+machine directly and learn the entire ProcessUnity application by using it.
+
+DEV URL (use this and ONLY this — never touch prod):
+[PASTE YOUR PROCESSUNITY DEV URL HERE]
+
+PLAYWRIGHT REPO REFERENCE (I downloaded it as a zip, use its docs as your API reference):
+[PASTE LOCAL PATH TO UNZIPPED microsoft/playwright FOLDER]
+
+SETUP — do this first, adapt to what's available:
+1. Check what exists on this machine: python, pip, node, npx. Tell me what you found.
+2. Preferred path: drive my ALREADY-OPEN Chrome via the DevTools protocol so my
+   SSO session is preserved. I will launch Chrome with --remote-debugging-port=9222
+   and log into the dev URL myself. You then write a Python script using
+   playwright's `connect_over_cdp("http://localhost:9222")` and run it.
+   (pip install playwright once if needed.)
+3. Fallback path: only if the CDP path is blocked, use `npx @playwright/cli`
+   (open, snapshot, click, fill) — no global installs.
+
+MISSION — learn the ENTIRE ProcessUnity process through the browser:
+1. Open the dev URL in the browser. Screenshot every screen. Read each page and
+   tell me what it is before you touch anything.
+2. Then systematically go through EVERYTHING: every nav item, every tab, every
+   button, every form, every dropdown. Click through all of it. Fill forms with
+   clearly-fake TEST data only (e.g. "Test Vendor QA", test@example.com).
+3. Complete full end-to-end workflows yourself in the browser — e.g. a vendor
+   onboarding/request flow from start to submit — the way a real user would.
+4. Where a workflow has multiple branches or roles, explore each branch.
+
+DELIVERABLES — write these to ./processunity-docs/ as you go:
+1. WORKFLOW-MAP.md — the full application map: every section, what it does, how
+   sections connect.
+2. WORKFLOWS/ — one markdown file per end-to-end workflow: numbered steps, what
+   to click/type on each screen, expected result, and a screenshot per step.
+3. automate_<workflow>.py — a reusable Playwright script per workflow that replays
+   it against the dev URL.
+
+RULES:
+- Dev URL only. Test data only. Never submit anything real.
+- Ask me before any destructive action (delete, cancel, submit anything
+  irreversible) — otherwise keep moving and narrate briefly as you go.
+- If a step fails, screenshot it, note what you expected vs what happened, try
+  one alternative selector/approach, then move on and flag it in the docs.
+- When you finish a workflow, summarize: what it does, how many steps, anything
+  surprising or broken you found.
