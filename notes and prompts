@@ -1,46 +1,76 @@
-I am on a Wells Fargo org laptop. Constraints: NO MCPs are available, and I
-want to avoid installing extra CLI tools. You will control the browser on this
-machine directly and learn the entire ProcessUnity application by using it.
+TASK: Design and scaffold the PRODUCTION TPRM platform with AI, using our POC repository only as input. Produce a production design package, a production code scaffold, a questions-and-solutions file, a production-faithful HTML prototype of the nine screens, a two-page team document and stand-up notes.
 
-DEV URL (use this and ONLY this — never touch prod):
-[PASTE YOUR PROCESSUNITY DEV URL HERE]
+CONTEXT
+You are in the TPRM platform POC repository (Python/FastAPI backend, React frontend, OpenShift). Treat it as a prototype to learn from, not code to extend. Two attachments describe the target:
+1. "AI Blueprint for the TPRM Platform": architecture, 27 use cases, two flagship flows, implementation blueprint, stack, governance, rollout, open questions.
+2. "TPRM Platform Screens": nine production screen designs (find a third party, evidence review, intake IRQ, supplier questionnaire, third-party overview, monitoring digest, executive summary, ask your data, admin AI observability).
+"Keel" is a placeholder product name. All names, suppliers and numbers in the designs are sample data.
 
-PLAYWRIGHT REPO REFERENCE (I downloaded it as a zip, use its docs as your API reference):
-[PASTE LOCAL PATH TO UNZIPPED microsoft/playwright FOLDER]
+PRODUCTION STANDARD (applies to everything you produce)
+- Bank-grade: SSO (OIDC) and role-based access for PBL, SMC, Supplier, RM, Admin; tenant isolation enforced in the database with row-level security; immutable audit log; secrets from the platform vault, never in code or config files; no PII in logs.
+- Reliability: health and readiness endpoints, timeouts, retries with backoff, idempotent jobs, circuit breaking and provider fallback on model calls, per-tenant rate limits and budgets, a kill switch per AI use case that needs no deployment.
+- Observability: OpenTelemetry traces with the GenAI attribute names (tokens in, out, cache read, cache write, model, prompt version), structured logs, metrics, one ai_run record per model call.
+- Quality: type hints and mypy, Ruff, unit tests for every module, contract tests for every API, an evaluation harness that blocks a prompt or model change below its gate, CI that runs all of it.
+- Delivery: containers, OpenShift manifests or Helm, configuration by environment, migrations with Alembic, a runbook, SLOs with error budgets.
+- Security: supplier documents are untrusted input (delimited, JSON-encoded, never in the system prompt); strict JSON schemas on every model output; citation check in code; OWASP LLM Top 10 reviewed; least privilege everywhere.
 
-SETUP — do this first, adapt to what's available:
-1. Check what exists on this machine: python, pip, node, npx. Tell me what you found.
-2. Preferred path: drive my ALREADY-OPEN Chrome via the DevTools protocol so my
-   SSO session is preserved. I will launch Chrome with --remote-debugging-port=9222
-   and log into the dev URL myself. You then write a Python script using
-   playwright's `connect_over_cdp("http://localhost:9222")` and run it.
-   (pip install playwright once if needed.)
-3. Fallback path: only if the CDP path is blocked, use `npx @playwright/cli`
-   (open, snapshot, click, fill) — no global installs.
+DECISIONS ALREADY MADE (do not re-open)
+- Tenants are internal Wells Fargo lines of business; a supplier's analysed document is shared across tenants by default; suppliers use one portal with separate identity.
+- Offline-first: document analysis, evidence mapping, digests and summaries run as background jobs that store results; only lookup ranking and ask-your-data call a model while a user waits, and those need separate approval.
+- Tachyon is the only model endpoint; three tiers (small for matching and triage, mid for extraction and drafting, large only on low confidence or critical-tier third parties); every call goes through one router module.
+- Every AI output carries chunk IDs, a verbatim quote verified in code, and a confidence score; a named person accepts, edits or rejects; the AI never changes a record.
+- Risk ratings are computed by rules; the model only explains them.
+- Target architecture: one repository, three deployables (api, ai-worker, web), one Postgres with pgvector and full-text search, Postgres-only job queue, no Redis. Document extraction with Docling; embeddings and reranking on CPU inside the cluster.
 
-MISSION — learn the ENTIRE ProcessUnity process through the browser:
-1. Open the dev URL in the browser. Screenshot every screen. Read each page and
-   tell me what it is before you touch anything.
-2. Then systematically go through EVERYTHING: every nav item, every tab, every
-   button, every form, every dropdown. Click through all of it. Fill forms with
-   clearly-fake TEST data only (e.g. "Test Vendor QA", test@example.com).
-3. Complete full end-to-end workflows yourself in the browser — e.g. a vendor
-   onboarding/request flow from start to submit — the way a real user would.
-4. Where a workflow has multiple branches or roles, explore each branch.
+STEP 1: PRODUCTION GAP ASSESSMENT
+- Read the whole repo: routes, models, services, React screens, model calls, logging, config, deployment. For each component say: promote as is / promote after changes (list them) / rewrite / drop, with the reason against the production standard above.
+- Read both attachments fully.
+- Produce a gap table with one row per target screen (9) and one row per use case (27): exists in POC (yes / partial / no), production gaps, what must be built.
+- Stop and show me this. Do not write code until I confirm.
 
-DELIVERABLES — write these to ./processunity-docs/ as you go:
-1. WORKFLOW-MAP.md — the full application map: every section, what it does, how
-   sections connect.
-2. WORKFLOWS/ — one markdown file per end-to-end workflow: numbered steps, what
-   to click/type on each screen, expected result, and a screenshot per step.
-3. automate_<workflow>.py — a reusable Playwright script per workflow that replays
-   it against the dev URL.
+STEP 2: QUESTIONS AND SOLUTIONS
+Write docs/production/questions-and-solutions.md as a table: Question | What you found | Options | Recommended solution | Effort (S, M, L) | Who must decide | Needed by phase. Cover at least:
+1. Identity: which OIDC provider, how roles map to groups, how supplier identity is issued and revoked.
+2. Secrets and config: which vault, how rotated, how injected on OpenShift.
+3. Data classification and retention: what the platform stores, for how long, how deletion is proven, how this maps to the records retention schedule.
+4. Tenant isolation: RLS design, connection pooling with transaction-scoped tenant context, large-tenant partitions for the vector index.
+5. Tachyon: endpoints available, prompt caching, batch, JSON-schema output, quotas, cost reporting, keys per tenant or cost attribution by us.
+6. Document pipeline: size limits, virus scanning, OCR fallback, hash-based dedupe, storage location, encryption at rest.
+7. Monitoring feeds: which feeds are licensed, how they are pulled, how often, cost.
+8. Human approval queue: table design, SLAs, escalation when a draft is not decided.
+9. Evaluation: golden-set ownership, labelling process, gates per use case, who signs a promotion.
+10. Model risk and audit: inventory format, what Model Risk and Internal Audit will ask for, how the ai_run log answers it.
+11. Availability: SLOs, RPO and RTO, backup and restore test, what degrades when Tachyon is down.
+12. Change management: branch strategy, environments, approvals, rollback.
+Add any question you find. One recommended solution each, not a list of maybes. Ask me at most five blocking questions before Step 3; answer the rest with a stated assumption.
 
-RULES:
-- Dev URL only. Test data only. Never submit anything real.
-- Ask me before any destructive action (delete, cancel, submit anything
-  irreversible) — otherwise keep moving and narrate briefly as you go.
-- If a step fails, screenshot it, note what you expected vs what happened, try
-  one alternative selector/approach, then move on and flag it in the docs.
-- When you finish a workflow, summarize: what it does, how many steps, anything
-  surprising or broken you found.
+STEP 3: PRODUCTION DESIGN PACKAGE (docs/production/)
+- architecture.md: target architecture, the six AI service modules, deployables, data flow, trust boundaries.
+- adr/ADR-001 to ADR-010: one architecture decision record per major choice (database, queue, orchestration without a framework, citation pattern, tier routing, tenant isolation, document reuse rule, approval gate, observability, evaluation gate). Each: context, decision, options rejected, consequences.
+- data-model.md: every table with columns, keys, indexes, RLS policy, retention.
+- api-contracts.md: every endpoint with request, response, errors, auth, rate limit.
+- prompt-contracts.md: the four-block prompt structure and the JSON schemas for every use case output.
+- threat-model.md: STRIDE plus OWASP LLM Top 10, with controls.
+- nfr-and-slos.md: performance targets, availability, latency per use case, capacity assumptions.
+- runbook.md: deploy, rollback, kill switch, budget breach, provider outage, cache cold start, eval failure.
+- readiness-checklist.md: everything that must be true before the first tenant goes live, with an owner column left blank.
+
+STEP 4: PRODUCTION SCAFFOLD (branch feature/keel-production, new top-level folder keel/)
+- keel/api, keel/ai_worker, keel/web skeletons; keel/ai_service with orchestrator, pipeline, retrieval, router, verify, telemetry, prompts (versioned YAML), schemas, evals.
+- Pydantic schemas for the evidence verdict and finding draft; a verifier that rejects any quote not found verbatim in its cited chunk; the ai_run table and migration; RLS policies with a test that proves cross-tenant reads fail; the job table with idempotency keys; a Tachyon client behind an interface with a fake for tests; OTel wiring; health endpoints; kill-switch config; CI pipeline (Ruff, mypy, pytest, eval gate); Dockerfiles and OpenShift manifests with placeholders for secrets.
+- No real model calls. Every module has tests. README explains how to run it locally and in CI.
+
+STEP 5: PRODUCTION-FAITHFUL HTML PROTOTYPE
+- One file, keel/web/prototype/keel-prototype.html, no build step, no CDN, no network calls, under 400 KB. All nine screens, navigation and links between them, role switcher, dashed "AI" tag on every drafted element, Accept / Edit / Reject on every draft, key interactions working in-page. This is the UX contract for the React build; name the React components it implies.
+
+STEP 6: TEAM DOCUMENT
+- docs/production/overview.md, two pages maximum, plain language, tables where comparing: what we are building; the five rules of the AI service (analyse once and store; cache the stable prompt prefix and batch overnight; retrieve, do not dump; small model first; cite, verify in code, a person approves); the two flagship flows in six steps each; the production stack; phase 1 scope and gate; decided questions and open ones.
+
+STEP 7: STAND-UP NOTES
+- docs/production/notes.md: 15 bullets maximum: decisions, assumptions, open questions, next three tasks with owners left blank.
+
+RULES
+- Do not modify POC code. Everything new lives under keel/ and docs/production/ on the branch.
+- No secrets, no real supplier or employee data, no calls to Tachyon or any external service.
+- Where the design and the POC disagree, follow the design and record it.
+- When done, give me: the gap table, the questions file, the design package index, the scaffold tree, test results, a screenshot of each of the nine screens, and a list of anything you could not do and why.
